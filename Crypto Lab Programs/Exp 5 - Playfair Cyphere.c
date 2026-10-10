@@ -1,59 +1,54 @@
+
 #include <stdio.h>
+#include <ctype.h>
 #include <string.h>
 
-char matrix[5][5];
+char key[5][5], used[26];
 
-void createMatrix(char key[])
+void makeKey(char k[])
 {
-    int used[26] = {0};
-    int i, j, k = 0;
-    char ch;
+    int i, n = 0;
+    char c;
 
-    used['J' - 'A'] = 1;
-
-    for (i = 0; key[i] != '\0'; i++)
+    for (i = 0; k[i] != '\0'; i++)
     {
-        ch = key[i];
+        c = toupper((unsigned char)k[i]);
 
-        if (ch >= 'a' && ch <= 'z')
-            ch = ch - 32;
+        if (c == 'J')
+            c = 'I';
 
-        if (ch == 'J')
-            ch = 'I';
-
-        if (ch >= 'A' && ch <= 'Z' && used[ch - 'A'] == 0)
+        if (c >= 'A' && c <= 'Z' && !used[c - 'A'])
         {
-            matrix[k / 5][k % 5] = ch;
-            used[ch - 'A'] = 1;
-            k++;
+            key[n / 5][n % 5] = c;
+            used[c - 'A'] = 1;
+            n++;
         }
     }
 
-    for (i = 0; i < 26; i++)
+    for (c = 'A'; c <= 'Z'; c++)
     {
-        if (used[i] == 0)
+        if (c != 'J' && !used[c - 'A'])
         {
-            matrix[k / 5][k % 5] = 'A' + i;
-            used[i] = 1;
-            k++;
+            key[n / 5][n % 5] = c;
+            n++;
         }
     }
 }
 
-void findPosition(char ch, int *row, int *col)
+void find(char c, int *r, int *col)
 {
     int i, j;
 
-    if (ch == 'J')
-        ch = 'I';
+    if (c == 'J')
+        c = 'I';
 
     for (i = 0; i < 5; i++)
     {
         for (j = 0; j < 5; j++)
         {
-            if (matrix[i][j] == ch)
+            if (key[i][j] == c)
             {
-                *row = i;
+                *r = i;
                 *col = j;
                 return;
             }
@@ -61,108 +56,111 @@ void findPosition(char ch, int *row, int *col)
     }
 }
 
-void encrypt(char text[], char result[])
+void process(char s[], char out[], int decrypt)
 {
-    int i, r1, c1, r2, c2;
+    int i, r1, c1, r2, c2, shift;
+    char a, b;
 
-    for (i = 0; text[i] != '\0'; i += 2)
+    shift = decrypt ? 4 : 1;
+
+    for (i = 0; s[i] != '\0'; i += 2)
     {
-        findPosition(text[i], &r1, &c1);
-        findPosition(text[i + 1], &r2, &c2);
+        find(s[i], &r1, &c1);
+        find(s[i + 1], &r2, &c2);
 
         if (r1 == r2)
         {
-            result[i] = matrix[r1][(c1 + 1) % 5];
-            result[i + 1] = matrix[r2][(c2 + 1) % 5];
+            a = key[r1][(c1 + shift) % 5];
+            b = key[r2][(c2 + shift) % 5];
         }
         else if (c1 == c2)
         {
-            result[i] = matrix[(r1 + 1) % 5][c1];
-            result[i + 1] = matrix[(r2 + 1) % 5][c2];
+            a = key[(r1 + shift) % 5][c1];
+            b = key[(r2 + shift) % 5][c2];
         }
         else
         {
-            result[i] = matrix[r1][c2];
-            result[i + 1] = matrix[r2][c1];
+            a = key[r1][c2];
+            b = key[r2][c1];
         }
+
+        out[i] = a;
+        out[i + 1] = b;
     }
 
-    result[i] = '\0';
-}
-
-void decrypt(char text[], char result[])
-{
-    int i, r1, c1, r2, c2;
-
-    for (i = 0; text[i] != '\0'; i += 2)
-    {
-        findPosition(text[i], &r1, &c1);
-        findPosition(text[i + 1], &r2, &c2);
-
-        if (r1 == r2)
-        {
-            result[i] = matrix[r1][(c1 + 4) % 5];
-            result[i + 1] = matrix[r2][(c2 + 4) % 5];
-        }
-        else if (c1 == c2)
-        {
-            result[i] = matrix[(r1 + 4) % 5][c1];
-            result[i + 1] = matrix[(r2 + 4) % 5][c2];
-        }
-        else
-        {
-            result[i] = matrix[r1][c2];
-            result[i + 1] = matrix[r2][c1];
-        }
-    }
-
-    result[i] = '\0';
+    out[i] = '\0';
 }
 
 int main()
 {
-    char key[50], text[100], prepared[100];
-    char encrypted[100], decrypted[100];
-    int i, j = 0;
+    char k[100], text[500], plain[500];
+    char prepared[1000], encrypted[1000], decrypted[1000];
+    int i, j = 0, n = 0;
 
     printf("Enter key: ");
-    scanf("%s", key);
+    fgets(k, sizeof(k), stdin);
 
-    printf("Enter text: ");
-    scanf("%s", text);
+    makeKey(k);
 
-    createMatrix(key);
-
-    /* Prepare plaintext */
-    for (i = 0; text[i] != '\0'; i++)
-    {
-        if (text[i] >= 'a' && text[i] <= 'z')
-            text[i] = text[i] - 32;
-
-        if (text[i] == 'J')
-            text[i] = 'I';
-    }
+    printf("Enter plaintext: ");
+    fgets(text, sizeof(text), stdin);
 
     for (i = 0; text[i] != '\0'; i++)
     {
-        prepared[j++] = text[i];
+        char c = toupper((unsigned char)text[i]);
 
-        if (text[i + 1] != '\0' && text[i] == text[i + 1])
-            prepared[j++] = 'X';
+        if (c >= 'A' && c <= 'Z')
+        {
+            if (c == 'J')
+                c = 'I';
+
+            plain[j++] = c;
+        }
     }
 
-    if (j % 2 != 0)
-        prepared[j++] = 'X';
+    plain[j] = '\0';
 
-    prepared[j] = '\0';
+    for (i = 0; i < j; )
+    {
+        char a = plain[i++];
+        prepared[n++] = a;
 
-    encrypt(prepared, encrypted);
+        if (i == j || plain[i] == a)
+            prepared[n++] = (a == 'X') ? 'Q' : 'X';
+        else
+            prepared[n++] = plain[i++];
+    }
 
+    prepared[n] = '\0';
+
+    process(prepared, encrypted, 0);
+    process(encrypted, decrypted, 1);
+
+    printf("\nOriginal input: %s", text);
     printf("Encrypted text: %s\n", encrypted);
 
-    decrypt(encrypted, decrypted);
+    printf("Decrypted text: ");
 
-    printf("Decrypted text: %s\n", decrypted);
+    j = 0;
+
+    for (i = 0; text[i] != '\0'; i++)
+    {
+        if (isalpha((unsigned char)text[i]))
+        {
+            char c = decrypted[j++];
+
+            if (text[i] >= 'a' && text[i] <= 'z')
+                c = tolower((unsigned char)c);
+
+            printf("%c", c);
+        }
+        else
+        {
+            printf("%c", text[i]);
+        }
+    }
+
+    printf("\n");
 
     return 0;
 }
