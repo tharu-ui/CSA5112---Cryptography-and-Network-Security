@@ -1,6 +1,6 @@
 
 import hashlib
-
+import hmac
 
 # TOY MERKLE-DAMGARD HASH
 
@@ -63,26 +63,20 @@ def naive_mac(key, message):
     return toy_hash(key + message)
 
 
-# HMAC IMPLEMENTATION
+# TOY HMAC CONSTRUCTION
 
 def xor_bytes(data, value):
     return bytes(byte ^ value for byte in data)
 
 
+# HMAC USING STANDARD SHA-256
+
 def toy_hmac(key, message):
-    if len(key) > BLOCK_SIZE:
-        key = toy_hash(key)
-
-    key = key.ljust(BLOCK_SIZE, b'\x00')
-
-    ipad = xor_bytes(key, 0x36)
-    opad = xor_bytes(key, 0x5C)
-
-    inner_hash = toy_hash(ipad + message)
-
-    outer_hash = toy_hash(opad + inner_hash)
-
-    return outer_hash
+    return hmac.new(
+        key,
+        message,
+        hashlib.sha256
+    ).digest()
 
 
 # VERIFICATION FUNCTIONS
@@ -96,7 +90,9 @@ def verify_naive_mac(key, message, mac):
 
 
 def verify_hmac(key, message, mac):
-    return toy_hmac(key, message) == mac
+    expected_mac = toy_hmac(key, message)
+
+    return hmac.compare_digest(expected_mac, mac)
 
 
 # EXPERIMENT 1: PLAIN HASH
@@ -116,7 +112,7 @@ def hash_experiment():
     print("\nOriginal Message Verification:",
           hashlib.sha256(message).hexdigest() == digest)
 
-    print("Modified Message Verification:",
+    print("Modified Message with Original Digest:",
           hashlib.sha256(modified).hexdigest() == digest)
 
     attacker_digest = hashlib.sha256(modified).hexdigest()
@@ -203,7 +199,7 @@ def length_extension_attack():
     print("without knowing the secret key.")
 
 
-# EXPERIMENT 4: HMAC VERIFICATION
+# EXPERIMENT 4: HMAC SECURITY VERIFICATION
 
 def hmac_experiment():
     print("\nEXPERIMENT 4: HMAC SECURITY VERIFICATION")
@@ -223,17 +219,20 @@ def hmac_experiment():
     print("Original Message:", message.decode())
     print("Original HMAC:", original_hmac.hex())
 
-    print("\nOriginal Message Verification:",
+    print("\nOriginal Message with Original HMAC:",
           verify_hmac(key, message, original_hmac))
 
-    print("Modified Message Verification:",
+    print("Modified Message with Original HMAC:",
           verify_hmac(key, modified, original_hmac))
 
-    print("Appended Message Verification:",
+    print("Appended Message with Original HMAC:",
           verify_hmac(key, appended, original_hmac))
 
-    print("Modified HMAC Verification:",
+    print("Original Message with Modified HMAC:",
           verify_hmac(key, message, bytes(modified_hmac)))
+
+    print("Modified Message with Newly Generated HMAC:",
+          verify_hmac(key, modified, toy_hmac(key, modified)))
 
 
 # EXPERIMENT 5: COMPARISON
@@ -249,7 +248,7 @@ def comparison_experiment():
     print(f"{'Naive MAC':<20} {'Yes':<15} {'Yes':<20} {'Vulnerable'}")
     print(f"{'HMAC':<20} {'Yes':<15} {'Yes':<20} {'Resistant'}")
 
-    print("\nNote: The toy hash is only for educational demonstration.")
+    print("\nNote: The toy hash and toy HMAC are educational demonstrations.")
     print("Real applications must use standard SHA-256 and HMAC-SHA-256.")
 
 

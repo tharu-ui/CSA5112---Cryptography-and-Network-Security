@@ -178,55 +178,62 @@ def dsa_experiment():
 
 # EXPERIMENT 3: DSA NONCE REUSE ATTACK
 
+
 def nonce_reuse_experiment():
     print("\nEXPERIMENT 3: DSA NONCE REUSE ATTACK")
     print("=" * 65)
 
-    message1 = "Payment of Rs.1000"
-    message2 = "Payment of Rs.5000"
+    message1 = "Transaction Amount 100"
+    message2 = "Transaction Amount 200"
 
-    nonce = 7
+    nonce = 3
 
-    signature1 = dsa_sign(message1, PRIVATE_KEY, nonce)
-    signature2 = dsa_sign(message2, PRIVATE_KEY, nonce)
-
-    r1, s1 = signature1
-    r2, s2 = signature2
-
-    z1 = hash_message(message1) % Q
-    z2 = hash_message(message2) % Q
+    # Find a valid nonce for both messages
+    while True:
+        try:
+            signature1 = dsa_sign(message1, PRIVATE_KEY, nonce)
+            signature2 = dsa_sign(message2, PRIVATE_KEY, nonce)
+            break
+        except ValueError:
+            nonce += 1
 
     print("Message 1:", message1)
     print("Message 2:", message2)
 
-    print("\nSignature 1:", signature1)
+    print("Reused Nonce:", nonce)
+
+    print("Signature 1:", signature1)
     print("Signature 2:", signature2)
 
-    print("\nReused Nonce:", nonce)
+    print("\nSame Nonce Used:", True)
+    print("Same r Value:", signature1[0] == signature2[0])
 
-    if r1 != r2 or s1 == s2:
-        print("Nonce recovery is not possible with this test pair.")
-        return
+    r1, s1 = signature1
+    r2, s2 = signature2
 
-    recovered_nonce = (
-        (z1 - z2) * pow((s1 - s2) % Q, -1, Q)
-    ) % Q
+    if r1 == r2 and s1 != s2:
+        z1 = hash_message(message1) % Q
+        z2 = hash_message(message2) % Q
 
-    recovered_private_key = (
-        (s1 * recovered_nonce - z1) * pow(r1, -1, Q)
-    ) % Q
+        recovered_nonce = (
+            (z1 - z2) *
+            pow((s1 - s2) % Q, -1, Q)
+        ) % Q
 
-    print("\nRecovered Nonce:", recovered_nonce)
-    print("Actual Nonce:", nonce)
+        recovered_private_key = (
+            (s1 * recovered_nonce - z1) *
+            pow(r1, -1, Q)
+        ) % Q
 
-    print("Recovered Private Key:", recovered_private_key)
-    print("Actual Private Key:", PRIVATE_KEY)
+        print("Recovered Nonce:", recovered_nonce)
+        print("Original Private Key:", PRIVATE_KEY)
+        print("Recovered Private Key:", recovered_private_key)
 
-    print("\nNonce Recovery Successful:",
-          recovered_nonce == nonce)
+        print("Private Key Successfully Recovered:",
+              recovered_private_key == PRIVATE_KEY)
 
-    print("Private Key Recovery Successful:",
-          recovered_private_key == PRIVATE_KEY)
+    else:
+        print("Selected messages did not produce distinct signatures.")
 
 
 # EXPERIMENT 4: TEXTBOOK RSA MULTIPLICATIVE FORGERY

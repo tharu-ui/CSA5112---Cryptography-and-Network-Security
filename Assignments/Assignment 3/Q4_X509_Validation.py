@@ -3,7 +3,7 @@ from cryptography import x509
 from cryptography.x509.oid import NameOID, ExtendedKeyUsageOID
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import hashlib
 
 
@@ -88,26 +88,38 @@ def create_certificate(
     return builder.sign(issuer_key, hashes.SHA256())
 
 
-# CERTIFICATE SIGNATURE VERIFICATION
+# CERTIFICATE AND CRL SIGNATURE VERIFICATION
 
-def verify_signature(certificate, issuer_key):
-    issuer_key.public_key().verify(
-        certificate.signature,
-        certificate.tbs_certificate_bytes,
+def verify_signature(signed_object, issuer_key):
+
+    if hasattr(issuer_key, "verify"):
+        issuer_public_key = issuer_key
+    else:
+        issuer_public_key = issuer_key.public_key()
+
+    if isinstance(signed_object, x509.Certificate):
+        signed_data = signed_object.tbs_certificate_bytes
+    else:
+        signed_data = signed_object.tbs_certlist_bytes
+
+    issuer_public_key.verify(
+        signed_object.signature,
+        signed_data,
         padding.PKCS1v15(),
-        certificate.signature_hash_algorithm
+        signed_object.signature_hash_algorithm
     )
 
 
 # CERTIFICATE VALIDITY CHECK
 
 def check_validity(certificate):
-    now = datetime.utcnow()
 
-    if now < certificate.not_valid_before:
+    now = datetime.now(timezone.utc)
+
+    if now < certificate.not_valid_before_utc:
         raise ValueError("Certificate is not yet valid")
 
-    if now > certificate.not_valid_after:
+    if now > certificate.not_valid_after_utc:
         raise ValueError("Certificate has expired")
 
 
@@ -125,6 +137,21 @@ def validate_chain(leaf, intermediate, root, hostname, crl=None):
 
     verify_signature(root, root.public_key())
     check_validity(root)
+
+    # ROOT CA CHECK
+    root_constraints = root.extensions.get_extension_for_class(
+        x509.BasicConstraints
+    ).value
+
+    if not root_constraints.ca:
+        raise ValueError("Root certificate is not a CA")
+
+    root_usage = root.extensions.get_extension_for_class(
+        x509.KeyUsage
+    ).value
+
+    if not root_usage.key_cert_sign:
+        raise ValueError("Root cannot sign certificates")
 
     # INTERMEDIATE ISSUER CHECK
     if intermediate.issuer != root.subject:
@@ -171,6 +198,18 @@ def validate_chain(leaf, intermediate, root, hostname, crl=None):
     if hostname not in san.get_values_for_type(x509.DNSName):
         raise ValueError("Hostname mismatch")
 
+    # SERVER AUTHENTICATION PURPOSE CHECK
+    try:
+        extended_usage = leaf.extensions.get_extension_for_class(
+            x509.ExtendedKeyUsage
+        ).value
+
+        if ExtendedKeyUsageOID.SERVER_AUTH not in extended_usage:
+            raise ValueError("Certificate is not valid for server authentication")
+
+    except x509.ExtensionNotFound:
+        raise ValueError("Extended Key Usage extension is missing")
+
     # REVOCATION CHECK
     if crl is not None:
 
@@ -179,9 +218,9 @@ def validate_chain(leaf, intermediate, root, hostname, crl=None):
 
         verify_signature(crl, intermediate.public_key())
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
-        if now < crl.last_update or now > crl.next_update:
+        if now < crl.last_update_utc or now > crl.next_update_utc:
             raise ValueError("CRL is not currently valid")
 
         for revoked in crl:
@@ -193,7 +232,7 @@ def validate_chain(leaf, intermediate, root, hostname, crl=None):
 
 # CREATE CERTIFICATE HIERARCHY
 
-now = datetime.utcnow()
+now = datetime.now(timezone.utc).replace(tzinfo=None)
 
 root_key = generate_key()
 intermediate_key = generate_key()
@@ -517,8 +556,8 @@ def certificate_details():
     print("Certificate Issuer:", leaf.issuer.rfc4514_string())
     print("Serial Number:", leaf.serial_number)
 
-    print("Valid From:", leaf.not_valid_before)
-    print("Valid Until:", leaf.not_valid_after)
+    print("Valid From:", leaf.not_valid_before_utc)
+    print("Valid Until:", leaf.not_valid_after_utc)
 
     print("Signature Algorithm:",
           leaf.signature_hash_algorithm.name)
