@@ -1,4 +1,3 @@
-# task1_pgp_mail.py
 import os
 import base64
 import zlib
