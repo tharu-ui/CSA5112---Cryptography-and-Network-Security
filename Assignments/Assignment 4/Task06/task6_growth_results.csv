@@ -1,0 +1,5 @@
+recipients,public_key_operations,symmetric_encryption_operations,message_size_bytes,execution_time_ms
+1,1,1,1891,1.47
+10,10,1,5150,0.45
+100,100,1,37821,4.1
+1000,1000,1,365422,55.71
